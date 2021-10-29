@@ -2,12 +2,30 @@ use bevy::prelude::*;
 
 // flappy behaviour component
 struct CFlappy {
-    strength: f32
+    strength: f32,
+    rotation_strength: f32
 }
 
 // gravity component
 struct CGravity {
     value: f32
+}
+
+
+struct CVelocity {
+    value: Vec2,
+    direction: Vec2,
+    speed: f32
+}
+
+impl Default for CVelocity {
+    fn default() -> Self {
+        CVelocity {
+            value: Vec2::ZERO,
+            direction: Vec2::ZERO,
+            speed: 3.0
+        }
+    }
 }
 
 // animation component
@@ -67,6 +85,7 @@ impl Plugin for UpdatePlugin {
         .add_system(gravity_system.system())
         .add_system(flappy_system.system())
         .add_system(animation_system.system())
+        .add_system(velocity_system.system())
         ;
 
     }
@@ -108,8 +127,8 @@ fn setup_bird(mut commands: Commands, bird_materials: Res<RFlappyBirdSprites>) {
         transform: Transform::from_scale(Vec3::splat(2.0)),
         ..Default::default()
     })
-    .insert(CFlappy  {strength: 12.0})
-    .insert(CGravity {value: 5.0})
+    .insert(CFlappy  {strength: 4.0, rotation_strength: 100.0})
+    .insert(CGravity {value: 0.2})
 
     .insert(CAnimation {
         anim_vec: vec![
@@ -117,6 +136,11 @@ fn setup_bird(mut commands: Commands, bird_materials: Res<RFlappyBirdSprites>) {
             bird_materials.yellow_bird_mid_flap.clone_weak(), 
             bird_materials.yellow_bird_down_flap.clone_weak()
         ],
+        ..Default::default()
+    })
+
+    .insert(CVelocity {
+        speed: 3.0, 
         ..Default::default()
     })
 
@@ -129,17 +153,25 @@ fn setup_bird(mut commands: Commands, bird_materials: Res<RFlappyBirdSprites>) {
 
 // -----systems----
 
-fn gravity_system(mut q: Query<(&CGravity, &mut Transform)>) {
-    for (gravity, mut transform) in q.iter_mut() {
-        transform.translation.y -= gravity.value;
+fn gravity_system(mut q: Query<(&CGravity, &mut CVelocity), With<Transform>>) {
+    for (gravity, mut velocity) in q.iter_mut() {
+        velocity.direction.y -= gravity.value;
     }   
 }
 
-fn flappy_system(keyboard_input: Res<Input<KeyCode>>, mut q: Query<(&CFlappy, &mut Transform)>) {
-    if keyboard_input.pressed(KeyCode::Space) {
-        for (flappy, mut transform) in q.iter_mut() {
-            transform.translation.y += flappy.strength;
+fn flappy_system(keyboard_input: Res<Input<KeyCode>>, mut q: Query<(&CFlappy, &mut CVelocity), With<Transform>>) {
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        for (flappy, mut velocity) in q.iter_mut() {
+            velocity.direction.y = flappy.strength;
+            // transform.rotation *= Quat::from_rotation_z(-flappy.rotation_strength);
         }
+    }
+}
+
+fn velocity_system(mut q: Query<(&mut CVelocity, &mut Transform), With<CFlappy>>) {
+    for (mut velocity, mut transform) in q.iter_mut() {
+        velocity.value = velocity.direction * velocity.speed;
+        transform.translation += Vec3::new(velocity.value.x, velocity.value.y, 0.0);
     }
 }
 

@@ -1,10 +1,13 @@
 use bevy::prelude::*;
+use bevy::render::camera::*;
 
 // flappy behaviour component
-struct CFlappy {
+struct CFlappyMovement {
     strength: f32,
-    rotation_strength: f32
+    rotation_strength: f32,
+    move_right_speed: f32
 }
+
 
 // gravity component
 struct CGravity {
@@ -29,12 +32,12 @@ impl Default for CVelocity {
 }
 
 // animation component
-struct CAnimation {
+struct CFrameAnimation {
     anim_vec: Vec<Handle<ColorMaterial>>,
     current_frame: usize,
 }
 
-impl CAnimation {
+impl CFrameAnimation {
     // takes a texture handle and sets it the current frame, we have to run go_next_frame() to go to the next frame
     fn set_texture_handle_to_current_frame(&self, texture_handle: &mut Handle<ColorMaterial>) {
         *texture_handle = self.anim_vec[self.current_frame].clone();
@@ -50,9 +53,9 @@ impl CAnimation {
     }
 }
 
-impl Default for CAnimation {
+impl Default for CFrameAnimation {
     fn default() -> Self {
-        CAnimation {
+        CFrameAnimation {
             anim_vec: vec![],
             current_frame: 0
         }
@@ -83,9 +86,10 @@ impl Plugin for UpdatePlugin {
     fn build(&self, app: &mut AppBuilder) {
         app
         .add_system(gravity_system.system())
-        .add_system(flappy_system.system())
+        .add_system(flappy_movement_system.system())
         .add_system(animation_system.system())
         .add_system(velocity_system.system())
+        .add_system(camera_follow_bird_system.system())
         ;
 
     }
@@ -127,10 +131,10 @@ fn setup_bird(mut commands: Commands, bird_materials: Res<RFlappyBirdSprites>) {
         transform: Transform::from_scale(Vec3::splat(2.0)),
         ..Default::default()
     })
-    .insert(CFlappy  {strength: 4.0, rotation_strength: 100.0})
+    .insert(CFlappyMovement  {strength: 4.0, rotation_strength: 100.0, move_right_speed: 0.5})
     .insert(CGravity {value: 0.2})
 
-    .insert(CAnimation {
+    .insert(CFrameAnimation {
         anim_vec: vec![
             bird_materials.yellow_bird_up_flap.clone_weak(),
             bird_materials.yellow_bird_mid_flap.clone_weak(), 
@@ -159,23 +163,27 @@ fn gravity_system(mut q: Query<(&CGravity, &mut CVelocity), With<Transform>>) {
     }   
 }
 
-fn flappy_system(keyboard_input: Res<Input<KeyCode>>, mut q: Query<(&CFlappy, &mut CVelocity), With<Transform>>) {
-    if keyboard_input.just_pressed(KeyCode::Space) {
-        for (flappy, mut velocity) in q.iter_mut() {
+fn flappy_movement_system(keyboard_input: Res<Input<KeyCode>>, mut q: Query<(&CFlappyMovement, &mut CVelocity), With<Transform>>) {
+    for (flappy, mut velocity) in q.iter_mut() {
+        // flap when space pressed
+        if keyboard_input.just_pressed(KeyCode::Space) {
             velocity.direction.y = flappy.strength;
-            // transform.rotation *= Quat::from_rotation_z(-flappy.rotation_strength);
+            //transform.rotation *= Quat::from_rotation_z(-flappy.rotation_strength);
         }
+
+        // movement to the right
+        velocity.direction.x = flappy.move_right_speed;
     }
 }
 
-fn velocity_system(mut q: Query<(&mut CVelocity, &mut Transform), With<CFlappy>>) {
+fn velocity_system(mut q: Query<(&mut CVelocity, &mut Transform), With<CFlappyMovement>>) {
     for (mut velocity, mut transform) in q.iter_mut() {
         velocity.value = velocity.direction * velocity.speed;
         transform.translation += Vec3::new(velocity.value.x, velocity.value.y, 0.0);
     }
 }
 
-fn animation_system(time: Res<Time>, mut q: Query<(&mut Timer, &mut CAnimation, &mut Handle<ColorMaterial>)>) {
+fn animation_system(time: Res<Time>, mut q: Query<(&mut Timer, &mut CFrameAnimation, &mut Handle<ColorMaterial>)>) {
     for (mut timer, mut canim, mut texture_handle) in q.iter_mut() {
         timer.tick(time.delta());
         if timer.just_finished() {  
@@ -183,4 +191,22 @@ fn animation_system(time: Res<Time>, mut q: Query<(&mut Timer, &mut CAnimation, 
             canim.set_texture_handle_to_current_frame(&mut texture_handle);
         }
     }
+}
+
+// query both the player and the bird
+// we can't have multiple queries as this would break rust's mutability rules
+// so we wrap them in a query set
+fn camera_follow_bird_system(
+    mut qset: QuerySet<(
+        Query<&mut Transform, With<CFlappyMovement>>,
+        Query<&mut Transform, With<Camera>>
+    )>
+) {
+    let player_transform = qset.q0_mut().single_mut().expect("There should only be one player in the game");
+    let player_pos_x = player_transform.translation.x; // <-- the scope of player_transform ends here
+    // so we can borrow qset as mutable again
+    let mut camera_transform = qset.q1_mut().single_mut().expect("There should only be one camera in the game");
+    
+    camera_transform.translation.x = player_pos_x;
+
 }

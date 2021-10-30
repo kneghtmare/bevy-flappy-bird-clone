@@ -1,4 +1,3 @@
-#[path="velocity_component.rs"]
 pub mod velocity_component; // gravity component needs to modify velocity component
 
 use bevy::prelude::*;

@@ -70,7 +70,7 @@ pub fn setup_bird(mut commands: Commands, bird_materials: Res<RFlappyBirdSprites
         transform: Transform::from_scale(Vec3::splat(2.0)),
         ..Default::default()
     })
-    .insert(CFlappyMovement  {strength: 4.0, rotation_strength: 100.0, move_right_speed: 0.5})
+    .insert(CFlappyMovement  {strength: 4.0, rotation_strength: 0.5, move_right_speed: 0.5})
     .insert(CGravity {value: 0.2})
 
     .insert(CFrameAnimation {
@@ -84,6 +84,7 @@ pub fn setup_bird(mut commands: Commands, bird_materials: Res<RFlappyBirdSprites
 
     .insert(CVelocity {
         speed: 3.0, 
+        angular: 0.0,
         ..Default::default()
     })
 
@@ -117,7 +118,7 @@ pub fn flappy_movement_system(keyboard_input: Res<Input<KeyCode>>, mut q: Query<
         // flap when space pressed
         if keyboard_input.just_pressed(KeyCode::Space) {
             velocity.direction.y = flappy.strength;
-            //transform.rotation *= Quat::from_rotation_z(-flappy.rotation_strength);
+            velocity.angular = flappy.rotation_strength;
         }
 
         // movement to the right

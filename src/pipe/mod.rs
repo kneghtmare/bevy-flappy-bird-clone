@@ -15,7 +15,7 @@ struct CPipeSpawner {
 impl CPipeSpawner {
     const PIPE_SIZE                 : f32 = 1.5;
     const SPAWN_OFFSET_X            : f32 = 200.0;
-    const MAX_PIPE_COUNT            : u32 = 5;
+    const MAX_PIPE_COUNT            : u32 = 8;
     const SPAWN_POS_MIN_Y           : f32 = -400.0;
     const SPAWN_POS_MAX_Y           : f32 = -100.0;
     const UPPER_LOWER_PIPE_OFFSET_Y : f32 = 200.0;
@@ -135,13 +135,15 @@ fn spawn_first_pipe(mut commands: Commands, pipe_sprites: Res<RPipeSprites>, mut
 }
 
 
-fn despawn_pipes_out_of_view(mut commands: Commands, mut qset: 
+fn despawn_pipes_out_of_view(mut commands: Commands,
+    qset: 
     QuerySet<(
     Query<(Entity, &Transform), With<CPipe>>,
     Query<&Transform, With<CFlappyMovement>>,
     )>,
 
-    windows: Res<Windows>
+    windows: Res<Windows>,
+    mut q2: Query<&mut CPipeSpawner> // <--- note: I can't have multiple queries but I can have a query set and another query 
 
     ) {
     let window = windows.get_primary().unwrap();
@@ -149,12 +151,13 @@ fn despawn_pipes_out_of_view(mut commands: Commands, mut qset:
     
     let player_transform = qset.q1().single().expect("There should only be one player");
     let player_pos_x = player_transform.translation.x;
+    let mut pipe_spawner = q2.single_mut().expect("There should only be one pipe spawner");
 
-    for (pipe_entity, pipe_transform) in qset.q0_mut().iter() {
+    for (pipe_entity, pipe_transform) in qset.q0().iter() {
         //                                                           subtract a little bit of offset so that despawning wont be visible
         if pipe_transform.translation.x < (player_pos_x - window_half_width - CPipeSpawner::PIPE_DESPAWN_OFFSET) {
             commands.entity(pipe_entity).despawn();
-
+            pipe_spawner.current_pipe_count -= 1;
         }
     }
 }
